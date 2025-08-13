@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can also add custom global styles here if needed */
+body {
+  font-family: 'Montserrat', sans-serif !important;
+  background-color: #171229;
+  color: #CEB466 !important;
+}
+
+header{
+  background-color: #171229 !important;
+}
+
+.padding-20 {
+  padding: 20% 0%;
+}
+
+
+.p5{
+  background: transparent !important;
+  border: 1px solid white;
+}
+
+.transparent-goldboarder {
+border: 1px solid #CEB466 !important;
+}
+
+.text-vaa-gold {
+  color:  #CEB466 !important;
+}
+
+.bg-vaa-gold {
+background-color:  #CEB466 !important;
+}
+
+.transparent-bg-input {
+  background-color: transparent !important;
+  border-radius: 0;
+  border-color: #CEB466 !important;
+  color: #CEB466 !important;
+}
+
+.transparent-bg-input::placeholder {
+  color: #CEB466 !important;
+}
+
+.spacer {
+  padding: 1% 0;
+}
+
+input {
+  background-color: transparent !important;
+  border-radius: 0;
+  border-color: #CEB466 !important;
+  color: #CEB466 !important;
+}
+
+input::placeholder {
+  color: #CEB466 !important;
+}
+
+ button {
+  background-color:#CEB466 !important;
+  color: #171229 !important;
+ }
+
+
+ .student-signup {
+margin: 20% 10%;
+border: 1px solid #CEB466;
+ }
+
+/* global.css */
+/* video, iframe {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+} */
