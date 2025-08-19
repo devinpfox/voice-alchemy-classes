@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Card, CardBody, Button, Input } from '@/components/ui'
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function Login() {
   const [email, setEmail] = useState('')

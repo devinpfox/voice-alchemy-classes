@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import DailyIframe, { DailyCall } from '@daily-co/daily-js';
 import clsx from 'clsx';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type Props = { studentId: string; canJoin: boolean; className?: string };
 
 export default function VideoDaily({ studentId, canJoin, className }: Props) {

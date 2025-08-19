@@ -1,6 +1,8 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui'
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function DashboardPage() {
   const router = useRouter()

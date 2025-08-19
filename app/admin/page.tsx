@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type Student = { id: string; name: string | null }
 

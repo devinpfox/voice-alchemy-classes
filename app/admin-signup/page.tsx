@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function AdminSignupPage() {
   const [email, setEmail] = useState('')

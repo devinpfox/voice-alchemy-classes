@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import VideoDaily from './VideoDaily'
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type Props = { studentId: string; isAdmin?: boolean }
 
 export default function SessionView({ studentId, isAdmin = false }: Props) {
