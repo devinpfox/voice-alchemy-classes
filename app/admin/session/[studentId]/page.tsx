@@ -1,10 +1,8 @@
-'use client'
-import { useParams } from 'next/navigation'
-import SessionView from '../../../../components/SessionView'
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import AdminStudentSessionClient from './AdminStudentSessionClient'
 
-export default function AdminStudentSessionPage() {
-  const { studentId } = useParams<{ studentId: string }>()
-  return <SessionView studentId={studentId} isAdmin />
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export default function Page() {
+  return <AdminStudentSessionClient />
 }
