@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import VideoDaily from './VideoDaily'
 
@@ -12,6 +12,21 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   const [active, setActive] = useState(false)
   const [startedAt, setStartedAt] = useState<Date | null>(null)
   const [archive, setArchive] = useState<Array<{ id: string; class_started_at: string; class_ended_at: string }>>([])
+  const [cssUrl, setCssUrl] = useState<string>('')
+
+  // --- client-only cssUrl
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCssUrl(`${window.location.origin}/daily-overrides.css`)
+    }
+  }, [])
+
+  // --- NEW: client identity & editing flags
+  const clientId = useMemo(() => crypto.randomUUID(), [])
+  const lastLocalSaveAt = useRef<number>(0)
+  const lastRemoteAt = useRef<number>(0)
+  const [peersTyping, setPeersTyping] = useState<number>(0)
+  const typingTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Load current notes, session state, and archive list
   useEffect(() => {
@@ -35,7 +50,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
     return () => { mounted = false }
   }, [studentId])
 
-  // Realtime: reflect Start/End session in UI immediately
+  // Realtime: class_sessions changes
   useEffect(() => {
     const channel = supabase
       .channel(`class_sessions:${studentId}`)
@@ -52,24 +67,94 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [studentId, active])
 
-  // Autosave live notes (only if class is active)
+  // realtime collaborative notes
+  useEffect(() => {
+    const ch = supabase.channel(`notes:${studentId}`, {
+      config: { presence: { key: clientId } },
+    })
+
+    ch.on('presence', { event: 'sync' }, () => {
+      const state = ch.presenceState() as Record<string, Array<{ typing?: boolean }>>
+      const othersTyping = Object.entries(state)
+        .filter(([key]) => key !== clientId)
+        .flatMap(([, arr]) => arr)
+        .filter(m => m.typing)
+      setPeersTyping(othersTyping.length)
+    })
+
+    ch.on('broadcast', { event: 'note' }, (msg) => {
+      const { content, from, ts } = msg.payload as { content: string; from: string; ts: number }
+      if (from === clientId) return
+      if (ts > lastRemoteAt.current) {
+        lastRemoteAt.current = ts
+        setNotes(content)
+      }
+    })
+
+    ch.subscribe(async (status) => {
+      if (status !== 'SUBSCRIBED') return
+      await ch.track({ typing: false })
+    })
+
+    return () => { supabase.removeChannel(ch) }
+  }, [studentId, clientId])
+
+  const broadcastNote = useCallback(
+    (content: string) => {
+      const ch = supabase.channel(`notes:${studentId}`)
+      ch.send({ type: 'broadcast', event: 'note', payload: { content, from: clientId, ts: Date.now() } })
+    },
+    [studentId, clientId]
+  )
+
+  const setTyping = useCallback(
+    (typing: boolean) => {
+      const ch = supabase.channel(`notes:${studentId}`)
+      ch.track({ typing }).catch(() => {})
+    },
+    [studentId]
+  )
+
   const save = useCallback(
     async (content: string) => {
       if (!active) return
       setSaving('saving')
       const { error } = await supabase.from('notes').upsert({ student_id: studentId, content })
+      if (!error) lastLocalSaveAt.current = Date.now()
       setSaving(error ? 'idle' : 'saved')
     },
     [studentId, active]
   )
 
   useEffect(() => {
+    const ch = supabase
+      .channel(`notes-db:${studentId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'notes', filter: `student_id=eq.${studentId}` },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { content?: string }
+          if (typeof row?.content !== 'string') return
+          const justSaved = Date.now() - lastLocalSaveAt.current < 800
+          if (!justSaved) setNotes(row.content)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [studentId])
+
+  useEffect(() => {
     if (!active) return
-    const id = setTimeout(() => save(notes), 500)
-    return () => clearTimeout(id)
+    const t = setTimeout(() => save(notes), 500)
+    return () => clearTimeout(t)
   }, [notes, save, active])
 
-  // Admin controls
+  const onChangeNotes = (v: string) => {
+    setNotes(v)
+    broadcastNote(v)
+    setTyping(true)
+    if (typingTimer.current) clearTimeout(typingTimer.current)
+    typingTimer.current = setTimeout(() => setTyping(false), 1200)
+  }
+
   const startClass = async () => {
     await supabase.from('class_sessions').upsert({
       student_id: studentId, is_active: true, started_at: new Date().toISOString(), ended_at: null,
@@ -81,22 +166,18 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   const endClass = async () => {
     const ended = new Date()
     const { data: cur } = await supabase.from('notes').select('content').eq('student_id', studentId).maybeSingle()
-
     await supabase.from('notes_archive').insert({
       student_id: studentId,
       content: cur?.content ?? '',
       class_started_at: (startedAt ?? new Date()).toISOString(),
       class_ended_at: ended.toISOString(),
     })
-
     await supabase.from('class_sessions').upsert({
       student_id: studentId, is_active: false,
       started_at: startedAt?.toISOString() ?? null, ended_at: ended.toISOString(),
     })
-
     await supabase.from('notes').upsert({ student_id: studentId, content: '' })
     setActive(false); setStartedAt(null)
-
     const { data: a } = await supabase
       .from('notes_archive')
       .select('id, class_started_at, class_ended_at')
@@ -106,64 +187,50 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   }
 
   return (
-
     <main className="p-6 max-w-5xl mx-auto grid gap-6">
-      {/* VIDEO */}
-      <section className="border rounded p-4">
-  <div className="flex items-center justify-between mb-3">
-    <div className="text-sm text-gray-500">Room</div>
-    <code className="text-xs">{studentId}</code>
-  </div>
+      <section className="border rounded overflow-hidden">
+        <div className="flex items-center justify-between p-4 pb-3">
+          <div className="text-sm text-gray-500">Room</div>
+        </div>
+        <div className="w-full h-auto">
+          <VideoDaily
+            studentId={studentId}
+            canJoin={active || isAdmin === true}
+            className="block"
+          />
+        </div>
+        {isAdmin ? (
+          <div className="p-4 border-t flex gap-2">
+            {!active ? (
+              <button onClick={startClass} className="px-4 py-2 rounded bg-green-600 text-white">Start session</button>
+            ) : (
+              <button onClick={endClass} className="px-4 py-2 rounded bg-red-600 text-white">End session</button>
+            )}
+          </div>
+        ) : (
+          <p className="p-4 text-sm text-gray-600 border-t">
+            {active ? 'Class in session.' : 'Class not in session yet. You can view past notes below.'}
+          </p>
+        )}
+      </section>
 
-  {/* Force full width & auto height */}
-  <div className="w-full h-auto">
-    <VideoDaily
-      studentId={studentId}
-      canJoin={active || isAdmin === true}
-      className="w-full h-auto" // pass through to internal video element if supported
-    />
-  </div>
-
-  {isAdmin ? (
-    <div className="mt-4 flex gap-2">
-      {!active ? (
-        <button onClick={startClass} className="px-4 py-2 rounded bg-green-600 text-white">
-          Start session
-        </button>
-      ) : (
-        <button onClick={endClass} className="px-4 py-2 rounded bg-red-600 text-white">
-          End session
-        </button>
-      )}
-    </div>
-  ) : (
-    <p className="mt-3 text-sm text-gray-600">
-      {active ? 'Class in session.' : 'Class not in session yet. You can view past notes below.'}
-    </p>
-  )}
-</section>
-
-
-
-      {/* NOTES (stacked under video) */}
       <section className="border rounded p-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold mb-2">Notes</h2>
-          {!active && <span className="text-xs text-gray-500">New note locked until class starts</span>}
+          <div className="text-xs text-gray-500">
+            {peersTyping > 0 ? `${peersTyping} ${peersTyping === 1 ? 'person is' : 'people are'} typing…` : (!active ? 'New note locked until class starts' : null)}
+          </div>
         </div>
-
         <textarea
           className="w-full h-80 border rounded p-3"
           value={notes}
           readOnly={!active}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => onChangeNotes(e.target.value)}
           placeholder={active ? 'Type notes…' : 'Notes are locked until class starts.'}
         />
         <div className="text-sm text-gray-500 mt-1">
           {!active ? 'Read-only' : saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
         </div>
-
-        {/* ARCHIVE */}
         <h3 className="font-semibold mt-6 mb-2">Past Classes</h3>
         <div className="divide-y border rounded">
           {archive.length === 0 && <div className="p-3 text-sm text-gray-500">No past classes yet.</div>}
@@ -172,9 +239,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
             const subtitle = new Date(row.class_ended_at).toLocaleTimeString()
             return (
               <details key={row.id} className="p-3">
-                <summary className="cursor-pointer">
-                  {title} — ended {subtitle}
-                </summary>
+                <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
                 <ArchivedContent id={row.id} />
               </details>
             )
@@ -189,11 +254,7 @@ function ArchivedContent({ id }: { id: string }) {
   const [text, setText] = useState<string>('Loading…')
   useEffect(() => {
     let m = true
-    supabase
-      .from('notes_archive')
-      .select('content')
-      .eq('id', id)
-      .single()
+    supabase.from('notes_archive').select('content').eq('id', id).single()
       .then(({ data }) => { if (m) setText(data?.content ?? '') })
     return () => { m = false }
   }, [id])

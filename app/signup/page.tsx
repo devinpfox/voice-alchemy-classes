@@ -10,25 +10,39 @@ export default function SignupPage() {
   const router = useRouter()
 
   const handleSignup = async () => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-  
-    // TS-safe: only read .message if error exists
+    // 1) include name (and role) in auth metadata
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name, role: 'student' } },
+    })
+
     if (error) {
       alert(error.message)
       return
     }
-  
-    // If email confirmation is ON, there’s no active session yet
+
+    // 2) If email confirmation is ON, no session yet — trigger will fill later
     if (!data.session) {
       alert('Check your email to confirm your account.')
-      // optional: router.push('/login')
       return
     }
-  
-    // If confirmation is OFF, user is signed in now
+
+    // 3) If confirmation is OFF, we have a session — upsert the profile now
+    const userId = data.user?.id
+    if (userId) {
+      const { error: upsertErr } = await supabase
+        .from('profiles')
+        .upsert({ id: userId, name, role: 'student' }, { onConflict: 'id' })
+
+      if (upsertErr) {
+        console.error('Profile upsert error:', upsertErr)
+        // optional: show a toast, but don’t block navigation
+      }
+    }
+
     router.push('/enter-class')
   }
-  
 
   return (
     <main className="p-8 student-signup">

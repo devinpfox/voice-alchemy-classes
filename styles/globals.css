@@ -78,3 +78,36 @@ border: 1px solid #CEB466;
   height: auto !important;
   display: block;
 } */
+
+/* Force the Daily video area to fill its container */
+.videoContainer.hasVideo,
+.videoContainer.hasVideo .videoArea,
+.videoContainer.hasVideo video {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Remove centering and padding from wrapper */
+.setup .card-content,
+.videoContainer.hasVideo {
+  padding: 0 !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+
+/* Ensure the video uses full object-fit scaling */
+.videoContainer.hasVideo video {
+  object-fit: cover !important;
+}
+
+.jsx-704165adc6b25914 {
+width: 100% !important;
+height: 100% !important;
+}
+
+.setup {
+  width: 100% !important;
+height: 100% !important;
+}

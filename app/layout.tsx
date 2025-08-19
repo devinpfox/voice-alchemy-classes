@@ -1,8 +1,11 @@
+// app/layout.tsx
+import "../styles/globals.css";
+import Link from "next/link";
 
-import Link from 'next/link';
-import '../styles/globals.css';
-
-export const metadata = { title: 'Voice Alchemy Academy', description: 'Live mentorship sessions' }
+export const metadata = {
+  title: "Voice Alchemy Academy",
+  description: "Live mentorship sessions",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,14 +21,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 py-8">
-          {children}
-        </main>
-s
+        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+
         <footer className="mt-12 border-t border-white/10 text-xs text-white/60">
-          <div className="mx-auto max-w-5xl px-4 py-6">© {new Date().getFullYear()} Voice Alchemy Academy</div>
+          <div className="mx-auto max-w-5xl px-4 py-6">
+            © {new Date().getFullYear()} Voice Alchemy Academy
+          </div>
         </footer>
       </body>
     </html>
-  )
+  );
 }

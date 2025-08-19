@@ -1,0 +1,34 @@
+/* Make the prejoin ("haircheck") card fill the iframe width */
+.haircheck .card.small {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;              /* remove centered margins */
+  border-radius: 0 !important;       /* optional: square edges to match container */
+  box-shadow: none !important;       /* optional */
+}
+
+/* Remove padding that creates inner gutters */
+.haircheck .card-content {
+  padding: 0 !important;
+}
+
+/* Stretch the entire video region */
+.haircheck .videoContainer,
+.haircheck .videoArea,
+.haircheck .tile.cover,
+.haircheck video {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;      /* fill horizontally without letterboxing */
+}
+
+/* Ensure the outer prejoin layout itself isn’t constraining width/height */
+.haircheck,
+.haircheck .setup {
+  width: 100% !important;
+  height: 100% !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
