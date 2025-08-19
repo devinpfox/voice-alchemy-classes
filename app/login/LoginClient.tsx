@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Card, CardBody, Button, Input } from '@/components/ui'
@@ -19,7 +20,6 @@ export default function Login() {
         return
       }
 
-      // 1) get the signed-in user
       const { data: userRes } = await supabase.auth.getUser()
       const user = userRes?.user
       if (!user) {
@@ -27,11 +27,9 @@ export default function Login() {
         return
       }
 
-      // 2) prefer role from auth metadata
       let role: string | undefined =
         (user.user_metadata?.role as string | undefined)?.toLowerCase()
 
-      // 3) fallback to profiles table if no metadata role
       if (!role) {
         const { data: profile, error: pErr } = await supabase
           .from('profiles')
@@ -40,13 +38,11 @@ export default function Login() {
           .single()
 
         if (pErr && pErr.code !== 'PGRST116') {
-          // ignore "no rows" but surface real errors
           console.error('profiles fetch error:', pErr)
         }
         role = (profile?.role as string | undefined)?.toLowerCase()
       }
 
-      // 4) route by role
       if (role === 'admin') {
         router.push('/admin')
       } else {
@@ -66,9 +62,33 @@ export default function Login() {
         <CardBody className="w-[420px] transparent-goldboarder">
           <h1 className="font-display text-3xl text-vaa-gold mb-6">Login</h1>
           <div className="space-y-3">
-            <Input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-            <Input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} />
-            <div className="spacer"></div>
+            <Input
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <Input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleLogin() }}
+            />
+
+            {/* actions */}
+            <div className="flex items-center justify-between pt-1">
+              <span /> {/* spacer to push link right */}
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-vaa-gold hover:underline focus:underline"
+                aria-label="Reset your password"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             <Button onClick={handleLogin} className="w-full mt-2" disabled={loading}>
               {loading ? 'Signing in…' : 'Log In'}
             </Button>
