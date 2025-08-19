@@ -13,6 +13,22 @@ header{
   background-color: #171229 !important;
 }
 
+*, *::before, *::after { box-sizing: border-box; }
+
+/* prevent horizontal scroll */
+html, body {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* make media shrink */
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .padding-20 {
   padding: 20% 0%;
 }

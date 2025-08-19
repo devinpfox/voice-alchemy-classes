@@ -57,44 +57,54 @@ export default function Login() {
   }
 
   return (
-    <div className="grid place-items-center padding-20">
-      <Card>
-        <CardBody className="w-[420px] transparent-goldboarder">
-          <h1 className="font-display text-3xl text-vaa-gold mb-6">Login</h1>
-          <div className="space-y-3">
-            <Input
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
-            <Input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleLogin() }}
-            />
+<div className="w-full max-w-md">
+  <Card>
+    <CardBody className="transparent-goldboarder p-6">
+      <h1 className="font-display text-3xl text-vaa-gold mb-6">Login</h1>
 
-            {/* actions */}
-            <div className="flex items-center justify-between pt-1">
-              <span /> {/* spacer to push link right */}
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-vaa-gold hover:underline focus:underline"
-                aria-label="Reset your password"
-              >
-                Forgot password?
-              </Link>
-            </div>
+      <div className="space-y-3">
+        <Input
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          className="w-full"
+        />
 
-            <Button onClick={handleLogin} className="w-full mt-2" disabled={loading}>
-              {loading ? 'Signing in…' : 'Log In'}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-    </div>
+        <Input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading) handleLogin();
+          }}
+          className="w-full"
+        />
+
+        <div className="flex items-center justify-between pt-1">
+          <span />
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-vaa-gold hover:underline focus:underline"
+            aria-label="Reset your password"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
+        <Button
+          onClick={handleLogin}
+          className="w-full mt-2"
+          disabled={loading}
+        >
+          {loading ? "Signing in…" : "Log In"}
+        </Button>
+      </div>
+    </CardBody>
+  </Card>
+</div>
+
   )
 }

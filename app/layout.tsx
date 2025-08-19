@@ -5,6 +5,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Voice Alchemy Academy",
   description: "Live mentorship sessions",
+  viewport: "width=device-width, initial-scale=1",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
