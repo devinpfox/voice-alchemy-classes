@@ -15,7 +15,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
             <Link href="/" className="font-display text-2xl tracking-wide text-vaa-gold">VAA</Link>
             <nav className="flex items-center gap-6 text-sm">
-              <Link className="hover:text-vaa-gold transition" href="/enter-class">Enter Class</Link>
               <Link className="hover:text-vaa-gold transition" href="/admin">Admin</Link>
             </nav>
           </div>
