@@ -103,7 +103,7 @@ export default function TunerButtont() {
         <div style={{ width: "100%", height: "100%" }}>
           <iframe
             title="Tuner"
-            src="https://voicealchemyacademy.com/chromatic-tuner/tune1.html"
+            src="/chromatic-tuner/tune1.html"
             style={{ width: "100%", height: "100%", border: "none" }}
           />
         </div>

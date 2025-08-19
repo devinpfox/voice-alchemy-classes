@@ -16,7 +16,7 @@ export default function DashboardPage() {
           Go To Class
         </Button>
         <iframe
-          src="https://voicealchemyacademy.com/chromatic-tuner/tune1.html"
+          src="/chromatic-tuner/tune1.html"
           className="w-full h-[500px] border-8 border-white rounded-lg shadow-xl bg-white"
         ></iframe>
       </div>
