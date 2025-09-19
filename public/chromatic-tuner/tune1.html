@@ -6,8 +6,7 @@
     <title>chromatic tuner</title>
     <link rel="shortcut icon" href="https://cdn.icon-icons.com/icons2/2783/PNG/512/meter_icon_177217.png" type="image/x-icon">
     <link rel="stylesheet" href="style1.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-5xE8iNAT+apC4wMrjpGSdEU7mDk6u2gsVr8P3s+T3bpKl9ylH+j5G94UrmR5qVo3RGGCqNevMZ41c3+5jn+GGg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 
 <body style="background-color: white !important;">
@@ -15,28 +14,34 @@
         <label for="micSensitivity">Mic Sensitivity:</label>
         <input type="range" id="micSensitivity" min="0" max="100" value="50" style="width: 250px;">
         <span id="micSensitivityValue">50</span>
-      </div>
-      
-
-    <canvas class="frequency-bars"></canvas>
-    <div style="display: none;" class="meter">
-        <div class="meter-dot"></div>
-        <div class="meter-pointer"></div>
     </div>
-    <div class="notes">
-        <div class="notes-list"></div>
-        <div style="display: none;" class="frequency">
+
+    <!-- class + id (same) -->
+    <canvas class="frequency-bars" id="frequency-bars"></canvas>
+
+    <!-- class + id (same) -->
+    <div class="meter" id="meter" style="display: none;">
+        <div class="meter-dot" id="meter-dot"></div>
+        <div class="meter-pointer" id="meter-pointer"></div>
+    </div>
+
+    <!-- class + id (same) -->
+    <div class="notes" id="notes">
+        <div class="notes-list" id="notes-list"></div>
+        <div class="frequency" id="frequency" style="display: none;">
             <span>Hz</span>
         </div>
     </div>
-    <div class="a4" style="display: none;">A<sub>4</sub> = <span>440</span> Hz</div>
-    <!-- <label class="auto">
-      Auto
-      <input type="checkbox" checked />
-    </label> -->
+
+    <!-- class + id (same) -->
+    <div class="a4" id="a4" style="display: none;">A<sub>4</sub> = <span>440</span> Hz</div>
+
     <section id="main">
-        <div class="nowplaying"></div>
-        <div class="keys">
+        <!-- class + id (same) -->
+        <div class="nowplaying" id="nowplaying"></div>
+
+        <!-- class + id (same) -->
+        <div class="keys" id="keys">
             <div data-key="65" class="key" data-note="C">
                 <span class="hints">C</span>
             </div>
@@ -73,30 +78,21 @@
             <div data-key="74" class="key" data-note="B">
                 <span class="hints">B</span>
             </div>
-            <!-- <div data-key="75" class="key" data-note="C">
-            <span class="hints">K</span>
-        </div>
-        <div data-key="79" class="key sharp" data-note="C#">
-            <span class="hints">O</span>
-        </div>
-        <div data-key="76" class="key" data-note="D">
-            <span class="hints">L</span>
-        </div>
-        <div data-key="80" class="key sharp" data-note="D#">
-            <span class="hints">P</span>
-        </div>
-        <div data-key="186" class="key" data-note="E">
-            <span class="hints">;</span>
-        </div> -->
-        <div class="center" id="center">
-            <div class="controls">
-                <button id="playButton" style="display: block;"><img style="max-width: 15px;" src="./play-icon-white.png" alt="Play"></button>
-                <button id="pauseButton" style="display: none;">  <img style="max-width: 15px;" src="./pause-icon.png" alt="Pause"></button>
+
+            <div class="center" id="center">
+                <div class="controls" id="controls">
+                    <button id="playButton" style="display: block;">
+                        <img style="max-width: 15px;" src="./play-icon-white.png" alt="Play">
+                    </button>
+                    <button id="pauseButton" style="display: none;">
+                        <img style="max-width: 15px;" src="./pause-icon.png" alt="Pause">
+                    </button>
+                </div>
             </div>
         </div>
-        </div>
 
-        <div class="numbersKeys">
+        <!-- class + id (same) -->
+        <div class="numbersKeys" id="numbersKeys">
             <ul>
                 <li class="pressed">0</li>
                 <li>1</li>
@@ -109,6 +105,8 @@
                 <li>8</li>
             </ul>
         </div>
+
+        <!-- audio tags unchanged -->
         <audio data-key="65" data-octave="0" src="./octave0/C0.mp3"></audio>
         <audio data-key="83" data-octave="0" src="./octave0/D0.mp3"></audio>
         <audio data-key="87" data-octave="0" src="./octave0/CSHARP0.mp3"></audio>
@@ -218,7 +216,6 @@
         <audio data-key="85" data-octave="7" src="./octave7/asharp.mp3"></audio>
         <audio data-key="74" data-octave="7" src="./octave7/b.mp3"></audio>
 
-        
         <audio data-key="65" data-octave="8" src="./octave8/c.mp3"></audio>
         <audio data-key="83" data-octave="8" src="./octave8/d.mp3"></audio>
         <audio data-key="87" data-octave="8" src="./octave8/csharp.mp3"></audio>
@@ -236,16 +233,16 @@
     <script>
         let activeBg = '#4fb605';
         let textColor = 'darkblue';
-    
+
         var btns = document.getElementsByClassName('key');
         var meter_circle = document.getElementsByClassName('keys')[0];
-    
+
         for (var i = 1; i < 12; i++) {
             btns[i].style.transform = "rotate(" + 30 * i + "deg)";
             btns[i].querySelector('.hints').style.transform = `rotate(${-30 * i}deg)`;
             localStorage.setItem('rotation_' + i, (-30 * i) + 'deg');
         }
-    
+
         document.addEventListener("DOMContentLoaded", function () {
             for (var i = 1; i < 12; i++) {
                 btns[i].style.transform = "rotate(" + 30 * i + "deg)";
@@ -256,47 +253,46 @@
                 }
             }
         });
-    
-        // ✅ FIXED: play/pause logic with correct currentlyPlayingNote tracking
+
+        // Play/pause logic with currentlyPlayingNote tracking
         document.querySelector('#center').addEventListener('click', () => {
             const selectedKey = document.querySelector('.key.clicked');
-    
+
             if (selectedKey) {
                 const keyCode = parseInt(selectedKey.getAttribute('data-key'));
                 const selectedOctave = parseInt(document.querySelector('.numbersKeys>ul>li.pressed').textContent);
                 const audio = document.querySelector(`audio[data-key="${keyCode}"][data-octave="${selectedOctave}"]`);
-    
+
                 if (!audio) return;
-    
+
                 // Pause any previously playing note
                 if (window.currentlyPlayingAudio && window.currentlyPlayingKey !== keyCode) {
                     window.currentlyPlayingAudio.pause();
                     window.currentlyPlayingAudio.currentTime = 0;
-    
+
                     const oldKey = document.querySelector('.key.playing');
                     if (oldKey) oldKey.classList.remove('playing');
-    
+
                     document.getElementById('playButton').style.display = 'block';
                     document.getElementById('pauseButton').style.display = 'none';
                 }
-    
+
                 if (!selectedKey.classList.contains('playing')) {
                     // Play
                     audio.currentTime = 0;
                     audio.play();
                     selectedKey.classList.add('playing');
-    
+
                     const keyNote = selectedKey.getAttribute('data-note');
-    
-                    // ✅ Set currently playing note (with parsed octave)
+
                     window.currentlyPlayingNote = {
                         name: keyNote,
                         octave: selectedOctave
                     };
-    
+
                     window.currentlyPlayingAudio = audio;
                     window.currentlyPlayingKey = keyCode;
-    
+
                     document.getElementById('playButton').style.display = 'none';
                     document.getElementById('pauseButton').style.display = 'block';
                 } else {
@@ -304,23 +300,23 @@
                     audio.pause();
                     audio.currentTime = 0;
                     selectedKey.classList.remove('playing');
-    
+
                     window.currentlyPlayingNote = null;
                     window.currentlyPlayingAudio = null;
                     window.currentlyPlayingKey = null;
-    
+
                     document.getElementById('playButton').style.display = 'block';
                     document.getElementById('pauseButton').style.display = 'none';
                 }
             }
         });
-    
+
         // Rotation for bottom octave buttons
         var bottom_btns = document.querySelectorAll('.numbersKeys>ul>li');
         for (let i = 0; i < 9; i++) {
             bottom_btns[i].style.transform = "rotate(" + (-15.5 * i) + "deg)";
         }
-    </script>    
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@9"></script>
     <script src="https://cdn.jsdelivr.net/npm/aubiojs@0.1.1/build/aubio.min.js"></script>
@@ -331,5 +327,4 @@
     <script src="app.js"></script>
     <script src="tone.js"></script>
 </body>
-
 </html>

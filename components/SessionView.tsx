@@ -14,21 +14,17 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   const [archive, setArchive] = useState<Array<{ id: string; class_started_at: string; class_ended_at: string }>>([])
   const [cssUrl, setCssUrl] = useState<string>('')
 
-  // --- client-only cssUrl
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCssUrl(`${window.location.origin}/daily-overrides.css`)
-    }
+    if (typeof window !== 'undefined') setCssUrl(`${window.location.origin}/daily-overrides.css`)
   }, [])
 
-  // --- NEW: client identity & editing flags
   const clientId = useMemo(() => crypto.randomUUID(), [])
   const lastLocalSaveAt = useRef<number>(0)
   const lastRemoteAt = useRef<number>(0)
   const [peersTyping, setPeersTyping] = useState<number>(0)
   const typingTimer = useRef<NodeJS.Timeout | null>(null)
 
-  // Load current notes, session state, and archive list
+  // Load current notes, session state, and archive
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -69,9 +65,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
 
   // realtime collaborative notes
   useEffect(() => {
-    const ch = supabase.channel(`notes:${studentId}`, {
-      config: { presence: { key: clientId } },
-    })
+    const ch = supabase.channel(`notes:${studentId}`, { config: { presence: { key: clientId } } })
 
     ch.on('presence', { event: 'sync' }, () => {
       const state = ch.presenceState() as Record<string, Array<{ typing?: boolean }>>
@@ -171,6 +165,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
       content: cur?.content ?? '',
       class_started_at: (startedAt ?? new Date()).toISOString(),
       class_ended_at: ended.toISOString(),
+      published: true, // publish when ending session
     })
     await supabase.from('class_sessions').upsert({
       student_id: studentId, is_active: false,
@@ -231,6 +226,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
         <div className="text-sm text-gray-500 mt-1">
           {!active ? 'Read-only' : saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
         </div>
+
         <h3 className="font-semibold mt-6 mb-2">Past Classes</h3>
         <div className="divide-y border rounded">
           {archive.length === 0 && <div className="p-3 text-sm text-gray-500">No past classes yet.</div>}
@@ -240,7 +236,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
             return (
               <details key={row.id} className="p-3">
                 <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
-                <ArchivedContent id={row.id} />
+                <ArchivedEditable id={row.id} />
               </details>
             )
           })}
@@ -250,13 +246,145 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   )
 }
 
-function ArchivedContent({ id }: { id: string }) {
+function ArchivedEditable({ id }: { id: string }) {
   const [text, setText] = useState<string>('Loading…')
+  const [original, setOriginal] = useState<string>('')
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState<'idle'|'saving'|'saved'|'error'>('idle')
+  const [published, setPublished] = useState<boolean>(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [revisions, setRevisions] = useState<Array<{
+    id: string; previous_content: string; new_content: string; edited_by: string|null; edited_at: string
+  }> | null>(null)
+
   useEffect(() => {
-    let m = true
-    supabase.from('notes_archive').select('content').eq('id', id).single()
-      .then(({ data }) => { if (m) setText(data?.content ?? '') })
-    return () => { m = false }
+    let on = true
+    supabase
+      .from('notes_archive')
+      .select('content, published')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => {
+        if (!on) return
+        const c = data?.content ?? ''
+        setText(c)
+        setOriginal(c)
+        setPublished(!!data?.published)
+      })
+    return () => { on = false }
   }, [id])
-  return <pre className="whitespace-pre-wrap text-sm mt-3">{text}</pre>
+
+  useEffect(() => {
+    if (!historyOpen) return
+    let on = true
+    supabase
+      .from('notes_revisions')
+      .select('id, previous_content, new_content, edited_by, edited_at')
+      .eq('archive_id', id)
+      .order('edited_at', { ascending: false })
+      .then(({ data }) => { if (on) setRevisions(data ?? []) })
+    return () => { on = false }
+  }, [historyOpen, id])
+
+  const onSave = async () => {
+    setSaving('saving')
+    const { error } = await supabase.from('notes_archive').update({ content: text }).eq('id', id)
+    if (error) { setSaving('error'); return }
+    setOriginal(text)
+    setSaving('saved')
+    setEditing(false)
+    setTimeout(() => setSaving('idle'), 900)
+  }
+
+  const onCancel = () => {
+    setText(original)
+    setEditing(false)
+    setSaving('idle')
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {!editing ? (
+        <>
+          <pre className="whitespace-pre-wrap text-sm">{text}</pre>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+            <button
+              className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+              onClick={() => setHistoryOpen(v => !v)}
+            >
+              {historyOpen ? 'Hide Revisions' : 'Revision History'}
+            </button>
+            {published && <span className="text-xs text-amber-700">Published</span>}
+          </div>
+        </>
+      ) : (
+        <>
+          <textarea
+            className="w-full min-h-48 border rounded p-3 text-sm"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm"
+              onClick={onSave}
+              disabled={saving === 'saving'}
+            >
+              {saving === 'saving' ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              className="px-3 py-1.5 rounded bg-gray-200 text-sm"
+              onClick={onCancel}
+              disabled={saving === 'saving'}
+            >
+              Cancel
+            </button>
+            <span className="text-xs text-gray-500">
+              {saving === 'saved' ? 'Saved' : saving === 'error' ? 'Save failed' : ' '}
+            </span>
+          </div>
+        </>
+      )}
+
+      {historyOpen && (
+        <div className="border rounded p-3 bg-gray-50">
+          {!revisions ? (
+            <div className="text-sm text-gray-500">Loading history…</div>
+          ) : revisions.length === 0 ? (
+            <div className="text-sm text-gray-500">No revisions yet.</div>
+          ) : (
+            <ul className="space-y-3">
+              {revisions.map((r) => (
+                <li key={r.id} className="text-sm">
+                  <div className="text-xs text-gray-500 mb-1">
+                    Edited {new Date(r.edited_at).toLocaleString()}
+                    {r.edited_by ? ` • by ${r.edited_by}` : ''}
+                  </div>
+                  <details className="rounded border bg-white">
+                    <summary className="cursor-pointer p-2">View change</summary>
+                    <div className="grid gap-2 p-2 md:grid-cols-2">
+                      <div>
+                        <div className="font-medium text-xs mb-1">Previous</div>
+                        <pre className="whitespace-pre-wrap text-xs">{r.previous_content}</pre>
+                      </div>
+                      <div>
+                        <div className="font-medium text-xs mb-1">New</div>
+                        <pre className="whitespace-pre-wrap text-xs">{r.new_content}</pre>
+                      </div>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }

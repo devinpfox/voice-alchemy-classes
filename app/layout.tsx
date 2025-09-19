@@ -1,6 +1,7 @@
 // app/layout.tsx
 import "../styles/globals.css";
 import Link from "next/link";
+import TunerTourMount from "../components/TunerTourMount";
 
 export const metadata = {
   metadataBase: new URL("https://voicealchemyacademy.app"),
@@ -60,7 +61,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-5xl px-4 py-8">{children}
+   
+        </main>
 
         <footer className="mt-12 border-t border-white/10 text-xs text-white/60">
           <div className="mx-auto max-w-5xl px-4 py-6">

@@ -2,7 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* You can also add custom global styles here if needed */
+.tutorial-background {
+  background: #171229 !important
+}
+
+.ear-training-section {
+  transform: scale(1.5);
+  transform-origin: top;
+  margin-top: -25%;
+}
+
 body {
   font-family: 'Montserrat', sans-serif !important;
   background-color: #171229;
