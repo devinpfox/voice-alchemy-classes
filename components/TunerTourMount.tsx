@@ -18,7 +18,7 @@ const steps: TourStep[] = [
     offsetY: -2,
   },
   {
-    sel: '.numbersKeys li.pressed',
+    sel: '.numbersKeys li.octave-number',
     pos: 'top',
     title: 'Octave Selector',
     text: 'These buttons let you choose an octave — the pitch range you want to practice in. Click a number to switch octaves. Lower numbers = deeper notes. Higher = brighter notes.',

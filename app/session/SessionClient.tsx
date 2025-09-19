@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import SessionView from '@/components/SessionView'
 import TunerButton from "@/components/TunerButton";
+import WarmUpButton from "@/components/WarmUpButton";
 
 export default function StudentSessionPage() {
   const [id, setId] = useState<string | null>(null)
@@ -23,6 +24,7 @@ export default function StudentSessionPage() {
   return (
     <>
       <SessionView studentId={id} />
+      <WarmUpButton />
       <TunerButton />
     </>
   )
