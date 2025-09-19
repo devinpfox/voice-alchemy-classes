@@ -5,7 +5,7 @@ import GuidedTour, { TourStep } from '@/components/GuidedTour';
 
 const steps: TourStep[] = [
   {
-    sel: '#main',
+    sel: '#tuner-frame',
     pos: 'bottom',
     title: 'Welcome',
     text: 'Welcome to your vocal tuner! This tool helps you train your voice by matching your pitch to reference notes. Let’s walk through how it works.',
