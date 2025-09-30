@@ -52,16 +52,46 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
       .channel(`class_sessions:${studentId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'class_sessions', filter: `student_id=eq.${studentId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'class_sessions',
+          filter: `student_id=eq.${studentId}`,
+        },
         (payload) => {
-          const row = (payload.new ?? payload.old) as { is_active?: boolean; started_at?: string | null }
-          if (row?.is_active !== undefined && row.is_active !== active) setActive(!!row.is_active)
-          if (row?.started_at !== undefined) setStartedAt(row.started_at ? new Date(row.started_at) : null)
+          console.log('[Realtime] class_sessions payload received:', payload)
+  
+          const row = (payload.new ?? payload.old) as {
+            is_active?: boolean
+            started_at?: string | null
+          }
+  
+          if (typeof row?.is_active === 'boolean') {
+            setActive((prev) => {
+              const newState = !!row.is_active
+              if (prev !== newState) {
+                console.log('[Realtime] updating active →', newState)
+              }
+              return newState
+            })
+          }
+  
+          if (row?.started_at !== undefined) {
+            const parsed = row.started_at ? new Date(row.started_at) : null
+            setStartedAt(parsed)
+          }
         }
       )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [studentId, active])
+      .subscribe((status) => {
+        console.log('[Realtime] class_sessions channel status:', status)
+      })
+  
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [studentId])
+  
+   
 
   // realtime collaborative notes
   useEffect(() => {
