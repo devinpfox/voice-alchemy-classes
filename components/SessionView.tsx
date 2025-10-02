@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import VideoDaily from './VideoDaily'
+import { Trash2 } from 'lucide-react'
 
 type Props = { studentId: string; isAdmin?: boolean }
 
@@ -270,7 +271,14 @@ useEffect(() => {
             return (
               <details key={row.id} className="p-3">
                 <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
-                <ArchivedEditable id={row.id} />
+                <ArchivedEditable
+  id={row.id}
+  isAdmin={isAdmin}
+  onDelete={() => {
+    setArchive((prev) => prev.filter((x) => x.id !== row.id))
+  }}
+/>
+
               </details>
             )
           })}
@@ -280,7 +288,7 @@ useEffect(() => {
   )
 }
 
-function ArchivedEditable({ id }: { id: string }) {
+function ArchivedEditable({ id, isAdmin, onDelete }: { id: string; isAdmin: boolean; onDelete: () => void }) {
   const [text, setText] = useState<string>('Loading…')
   const [original, setOriginal] = useState<string>('')
   const [editing, setEditing] = useState(false)
@@ -336,11 +344,31 @@ function ArchivedEditable({ id }: { id: string }) {
     setSaving('idle')
   }
 
+  const onDeleteClick = async () => {
+    const confirmed = window.confirm('Are you sure you want to delete this class note? This cannot be undone.')
+    if (!confirmed) return
+    await supabase.from('notes_archive').delete().eq('id', id)
+    onDelete()
+  }
+
   return (
     <div className="mt-3 space-y-3">
       {!editing ? (
         <>
-          <pre className="whitespace-pre-wrap text-sm">{text}</pre>
+          <div className="flex justify-between items-start">
+            <pre className="whitespace-pre-wrap text-sm">{text}</pre>
+            {isAdmin && (
+ <button
+ className="ml-2 bg-transparent hover:bg-transparent border-none outline-none"
+ onClick={onDeleteClick}
+ title="Delete this note"
+ aria-label="Delete"
+>
+ <Trash2 size={18} color="#171229" />
+</button>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               className="px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-sm"
