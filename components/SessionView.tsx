@@ -46,50 +46,54 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
     return () => { mounted = false }
   }, [studentId])
 
-  // Realtime: class_sessions changes
-  useEffect(() => {
-    const channel = supabase
-      .channel(`class_sessions:${studentId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'class_sessions',
-          filter: `student_id=eq.${studentId}`,
-        },
-        (payload) => {
-          console.log('[Realtime] class_sessions payload received:', payload)
-  
-          const row = (payload.new ?? payload.old) as {
-            is_active?: boolean
-            started_at?: string | null
-          }
-  
-          if (typeof row?.is_active === 'boolean') {
-            setActive((prev) => {
-              const newState = !!row.is_active
-              if (prev !== newState) {
-                console.log('[Realtime] updating active →', newState)
-              }
-              return newState
-            })
-          }
-  
-          if (row?.started_at !== undefined) {
-            const parsed = row.started_at ? new Date(row.started_at) : null
-            setStartedAt(parsed)
-          }
+ // Realtime: class_sessions changes
+useEffect(() => {
+  const channel = supabase
+    .channel(`class_sessions:${studentId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'class_sessions',
+      },
+      (payload) => {
+        console.log('[Realtime] class_sessions payload received:', payload)
+
+        const row = (payload.new ?? payload.old) as {
+          student_id?: string
+          is_active?: boolean
+          started_at?: string | null
         }
-      )
-      .subscribe((status) => {
-        console.log('[Realtime] class_sessions channel status:', status)
-      })
+
+        // 🛑 We manually filter here instead of using Supabase `filter:` param
+        if (!row.student_id || row.student_id !== studentId) {
+          console.warn('[Realtime] Ignoring unrelated row. Expected:', studentId, 'Got:', row.student_id)
+          return
+        }
+
+        if (typeof row?.is_active === 'boolean') {
+          const newState = !!row.is_active
+          setActive(newState)
+          console.log('[Realtime] updated active →', newState)
+        }
+
+        if (row?.started_at !== undefined) {
+          const parsed = row.started_at ? new Date(row.started_at) : null
+          setStartedAt(parsed)
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log('[Realtime] class_sessions channel status:', status)
+    })
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [studentId])
+
   
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [studentId])
   
    
 
