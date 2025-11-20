@@ -1,72 +1,72 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import DailyIframe, { DailyCall, DailyEventObjectFatalError, DailyAdvancedOptions } from '@daily-co/daily-js';
+import DailyIframe, {
+  DailyCall,
+  DailyEventObjectFatalError,
+} from '@daily-co/daily-js';
 import clsx from 'clsx';
 
 type Props = {
   studentId: string;
   canJoin: boolean;
   className?: string;
-  videoRef?: React.RefObject<HTMLDivElement | null>;
-  isMiniPlayer?: boolean; // <-- ADDED PROP
+  isMiniPlayer?: boolean;
 };
 
-export default function VideoDaily({ studentId, canJoin, className, videoRef, isMiniPlayer = false }: Props) {
-  // Only used when no external videoRef is provided
+export default function VideoDaily({
+  studentId,
+  canJoin,
+  className,
+  isMiniPlayer = false,
+}: Props) {
+  // Container where Daily Prebuilt iframe will be mounted
   const internalRef = useRef<HTMLDivElement>(null);
+  const mountTarget = internalRef;
 
-  // DAILY CALL
+  // Daily call state
   const callRef = useRef<DailyCall | null>(null);
-  const [callObject, setCallObject] = useState<DailyCall | null>(null); // <-- ADDED STATE
-  const [isMeetingJoined, setIsMeetingJoined] = useState(false); // <-- ADDED STATE: Track if meeting is actually joined
-  const currentRoomRef = useRef<string | null>(null);
+  const [callObject, setCallObject] = useState<DailyCall | null>(null);
+  const [isMeetingJoined, setIsMeetingJoined] = useState(false);
+
+  const currentRoomUrlRef = useRef<string | null>(null);
   const initLockRef = useRef(false);
 
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
 
-  // Mount target for Daily – ALWAYS the video-only div
-  const mountTarget = videoRef ?? internalRef;
-
-  // Effect to toggle UI chrome when mini-player state changes
-  useEffect(() => {
-    // Only proceed if callObject exists AND the meeting has actually been joined
-    if (!callObject || !isMeetingJoined) return;
-
-    // In mini-player mode, hide UI chrome. When not, show it again.
-    callObject.setShowLocalVideo(!isMiniPlayer);
-    callObject.setShowParticipantsBar(!isMiniPlayer);
-
-  }, [isMiniPlayer, callObject, isMeetingJoined]); // <-- ADDED isMeetingJoined to dependency array
-
+  /**
+   * Create + join Daily Prebuilt when we can join
+   */
   useEffect(() => {
     let cancelled = false;
 
-    const logTeardown = async () => {
+    const teardown = async () => {
       try {
         await callRef.current?.destroy();
-      } catch {}
+      } catch {
+        // ignore
+      }
       callRef.current = null;
-      currentRoomRef.current = null;
       setCallObject(null);
-      setIsMeetingJoined(false); // <-- RESET STATE ON TEARDOWN
+      setIsMeetingJoined(false);
     };
 
-    // If cannot join OR no mount target exists, teardown
     if (!canJoin || !mountTarget.current) {
-      logTeardown();
+      teardown();
       return;
     }
 
-    // Strict mode double-run guard
+    // React strict mode guard: only recreate if studentId changes
     if (initLockRef.current) {
-      // same student? do nothing
-      if (currentRoomRef.current === studentId) return;
-
-      // different student → teardown fully
-      logTeardown();
+      // same student, do nothing
+      if (currentRoomUrlRef.current && currentRoomUrlRef.current.includes(studentId)) {
+        return;
+      }
+      // different student → full teardown
+      teardown();
     }
+
     initLockRef.current = true;
 
     (async () => {
@@ -74,66 +74,62 @@ export default function VideoDaily({ studentId, canJoin, className, videoRef, is
         setError(null);
         setJoining(true);
 
-        // 1) Request room + token
+        // 1) Get room URL + token for this student
         const res = await fetch(`/api/rooms/${studentId}`, { cache: 'no-store' });
         const json = await res.json().catch(() => null);
+
         if (!res.ok || json?.error || !json?.joinUrl || !json?.token) {
-          throw new Error(json?.error || 'Failed to get room');
+          throw new Error(json?.error || 'Failed to get Daily room.');
         }
 
         const { joinUrl, token } = json;
-        currentRoomRef.current = studentId;
+        currentRoomUrlRef.current = joinUrl;
 
         if (cancelled) return;
 
-        await logTeardown();
+        await teardown();
 
-        // 2) Build Daily iframe directly inside the video-only element
-        const element = mountTarget.current!;
-        const url = `${joinUrl}?t=${token}`;
-
-        const frame = DailyIframe.createFrame(element, {
-          url,
-          showLeaveButton: false,
+        // 2) Create the Prebuilt iframe
+        const frame = DailyIframe.createFrame(mountTarget.current!, {
           iframeStyle: {
             width: '100%',
             height: '100%',
             border: '0',
             borderRadius: '0.5rem',
           },
-          dailyConfig: { logLevel: 'debug' },
-        } as DailyAdvancedOptions);
+        });
 
         callRef.current = frame;
-        setCallObject(frame); // <-- SET STATE FOR OTHER EFFECTS
+        setCallObject(frame);
 
-        // Permissions
         const iframeEl = frame.iframe();
         if (iframeEl) {
           iframeEl.setAttribute(
             'allow',
-            'camera; microphone; autoplay; clipboard-write; display-capture; fullscreen; picture-in-picture'
+            'camera; microphone; autoplay; clipboard-write; display-capture; fullscreen; picture-in-picture',
           );
         }
 
-        frame.on('joined-meeting', () => { // <-- MODIFIED HANDLER
+        // 3) Wire up events
+        frame.on('joined-meeting', () => {
           setJoining(false);
-          setIsMeetingJoined(true); // <-- SET STATE WHEN MEETING IS JOINED
+          setIsMeetingJoined(true);
         });
-        frame.on('error', (e?: DailyEventObjectFatalError) => setError(e?.errorMsg || 'Call error'));
 
-        // Timeout fallback
-        const timeout = setTimeout(() => {
-          setError('Connection timeout. Check mic/cam permissions.');
-        }, 45000);
+        frame.on('error', (e?: DailyEventObjectFatalError) => {
+          setError(e?.errorMsg || 'Call error');
+        });
 
-        try {
-          await frame.join();
-        } finally {
-          clearTimeout(timeout);
-        }
+        // 4) Join the room
+        await frame.join({
+          url: `${joinUrl}?t=${token}`,
+          showLeaveButton: true,
+          // initial UI; will be adjusted again by the mini-player effect
+          showLocalVideo: true,
+          showParticipantsBar: true,
+        });
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Video failed to load');
+        if (!cancelled) setError(e?.message || 'Video failed to load.');
       } finally {
         if (!cancelled) setJoining(false);
       }
@@ -142,28 +138,56 @@ export default function VideoDaily({ studentId, canJoin, className, videoRef, is
     return () => {
       cancelled = true;
 
+      // defer so React can unmount the node first
       setTimeout(() => {
         if (!document.body.contains(mountTarget.current as any)) {
           initLockRef.current = false;
-          logTeardown();
+          teardown();
         }
       }, 0);
     };
-  }, [studentId, canJoin, mountTarget]);
+  }, [studentId, canJoin]);
+
+  /**
+   * When mini-player state changes, toggle certain UI pieces
+   * (Only possible for things Daily exposes: local self-view + participants bar)
+   */
+  useEffect(() => {
+    if (!callObject || !isMeetingJoined) return;
+
+    if (isMiniPlayer) {
+      // In mini-player: hide local preview + participants bar
+      callObject.setShowLocalVideo(false);
+      callObject.setShowParticipantsBar(false);
+    } else {
+      // Full view: restore them
+      callObject.setShowLocalVideo(true);
+      callObject.setShowParticipantsBar(true);
+    }
+  }, [isMiniPlayer, callObject, isMeetingJoined]);
 
   return (
     <div className={clsx('relative w-full h-full', className)}>
       {!canJoin ? (
-        <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
+        <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
           Video: Waiting for teacher…
         </div>
       ) : (
-        <div className="relative w-full h-full">
-          {/* 🚀 DAILY VIDEO SURFACE ONLY */}
-          <div
-            ref={mountTarget}
-            className="w-full h-full overflow-hidden"
-          />
+        <div className="relative h-full w-full">
+          {/* Daily Prebuilt iframe mounts here */}
+          <div ref={mountTarget} className="h-full w-full overflow-hidden" />
+
+          {/* Optional tiny status text in case you want it */}
+          {joining && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center text-xs text-gray-300">
+              Connecting to room…
+            </div>
+          )}
+          {error && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center text-xs text-red-400">
+              {error}
+            </div>
+          )}
         </div>
       )}
     </div>

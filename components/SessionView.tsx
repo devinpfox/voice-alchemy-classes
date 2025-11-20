@@ -15,18 +15,89 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   const [archive, setArchive] = useState<Array<{ id: string; class_started_at: string; class_ended_at: string }>>([])
   const [cssUrl, setCssUrl] = useState<string>('')
 
-  // Mini-player state and refs
+  // --- Mini-player State & Refs ---
   const videoWrapperRef = useRef<HTMLDivElement>(null)
   const videoStickyRef = useRef<HTMLDivElement>(null)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
-  const [headerHeight, setHeaderHeight] = useState(0)
   const videoPlaceholderHeight = useRef(0)
+
+  // -- Draggable & Resizable Mini-player State --
+  const defaultMiniSize = useMemo(() => ({ width: 260, height: 150 }), []);
+  const [miniSize, setMiniSize] = useState(defaultMiniSize);
+  const [miniPosition, setMiniPosition] = useState({ top: 80, left: 16 });
+  const interactionRef = useRef<{
+    type: 'drag' | 'resize';
+    startX: number;
+    startY: number;
+    initialTop: number;
+    initialLeft: number;
+    initialWidth: number;
+    initialHeight: number;
+  } | null>(null);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined') setCssUrl(`${window.location.origin}/daily-overrides.css`)
   }, [])
 
-  // Effect for mini-player scroll and resize behavior
+  // --- Drag & Resize Logic ---
+
+  const onPointerMove = useCallback((event: PointerEvent) => {
+    if (!interactionRef.current) return;
+
+    const { type, startX, startY, initialTop, initialLeft, initialWidth, initialHeight } = interactionRef.current;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+
+    if (type === 'drag') {
+      const newTop = initialTop + dy;
+      const newLeft = initialLeft + dx;
+
+      // Clamp position to viewport
+      const clampedTop = Math.max(0, Math.min(newTop, window.innerHeight - miniSize.height));
+      const clampedLeft = Math.max(0, Math.min(newLeft, window.innerWidth - miniSize.width));
+      
+      setMiniPosition({ top: clampedTop, left: clampedLeft });
+
+    } else if (type === 'resize') {
+      const newWidth = initialWidth + dx;
+      const newHeight = initialHeight + dy;
+
+      // Clamp size to min/max constraints
+      const clampedWidth = Math.max(180, Math.min(newWidth, window.innerWidth - miniPosition.left));
+      const clampedHeight = Math.max(100, Math.min(newHeight, window.innerHeight - miniPosition.top));
+      
+      setMiniSize({ width: clampedWidth, height: clampedHeight });
+    }
+  }, [miniSize.width, miniSize.height, miniPosition.left, miniPosition.top]);
+
+  const onPointerUp = useCallback(() => {
+    document.body.classList.remove('no-select');
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    interactionRef.current = null;
+  }, [onPointerMove]);
+
+  const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>, type: 'drag' | 'resize') => {
+    event.stopPropagation();
+    
+    interactionRef.current = {
+      type,
+      startX: event.clientX,
+      startY: event.clientY,
+      initialTop: miniPosition.top,
+      initialLeft: miniPosition.left,
+      initialWidth: miniSize.width,
+      initialHeight: miniSize.height,
+    };
+    
+    document.body.classList.add('no-select');
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [miniPosition, miniSize, onPointerMove, onPointerUp]);
+
+
+  // --- Scroll & Resize Behavior ---
   useEffect(() => {
     const headerEl = document.querySelector('header')
     const stickyEl = videoStickyRef.current
@@ -35,31 +106,32 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
 
     const handleScroll = () => {
       const wrapperEl = videoWrapperRef.current
-      const currentHeaderEl = document.querySelector('header') // Re-query for safety
+      const currentHeaderEl = document.querySelector('header')
       if (!wrapperEl || !currentHeaderEl) return
 
       const hHeight = currentHeaderEl.getBoundingClientRect().height
       const wrapperTop = wrapperEl.getBoundingClientRect().top
-
       const shouldBeMini = wrapperTop <= hHeight
-      setIsMiniPlayer(prev => (prev === shouldBeMini ? prev : shouldBeMini))
+
+      setIsMiniPlayer(prev => {
+        if (prev === shouldBeMini) return prev;
+        
+        // On transition into mini-player, reset to default position/size
+        if (shouldBeMini && !prev) {
+          setMiniPosition({ top: hHeight + 8, left: 16 });
+          setMiniSize(defaultMiniSize);
+        }
+        return shouldBeMini;
+      });
     }
 
     const handleResize = () => {
-      const currentHeaderEl = document.querySelector('header')
-      if (!currentHeaderEl) return
-      
-      setHeaderHeight(currentHeaderEl.getBoundingClientRect().height)
-
-      // Only update the placeholder height if we are not in mini-player mode.
-      // This preserves the original height for when we snap back.
+      // On window resize, just ensure the placeholder height is correct if not in mini-mode
       if (!isMiniPlayer && videoStickyRef.current) {
         videoPlaceholderHeight.current = videoStickyRef.current.offsetHeight
       }
     }
-
-    // Set initial values
-    setHeaderHeight(headerEl.getBoundingClientRect().height)
+    
     videoPlaceholderHeight.current = stickyEl.offsetHeight
     
     window.addEventListener('scroll', handleScroll, { passive: true })
@@ -69,7 +141,7 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleResize)
     }
-  }, [isMiniPlayer]) // Rerun when isMiniPlayer changes to update resize handler closure
+  }, [isMiniPlayer, defaultMiniSize])
 
   const clientId = useMemo(() => crypto.randomUUID(), [])
   const lastLocalSaveAt = useRef<number>(0)
@@ -111,44 +183,29 @@ useEffect(() => {
         table: 'class_sessions',
       },
       (payload) => {
-        console.log('[Realtime] class_sessions payload received:', payload)
-
         const row = (payload.new ?? payload.old) as {
           student_id?: string
           is_active?: boolean
           started_at?: string | null
         }
 
-        // 🛑 We manually filter here instead of using Supabase `filter:` param
-        if (!row.student_id || row.student_id !== studentId) {
-          console.warn('[Realtime] Ignoring unrelated row. Expected:', studentId, 'Got:', row.student_id)
-          return
-        }
+        if (!row.student_id || row.student_id !== studentId) return;
 
         if (typeof row?.is_active === 'boolean') {
-          const newState = !!row.is_active
-          setActive(newState)
-          console.log('[Realtime] updated active →', newState)
+          setActive(!!row.is_active)
         }
 
         if (row?.started_at !== undefined) {
-          const parsed = row.started_at ? new Date(row.started_at) : null
-          setStartedAt(parsed)
+          setStartedAt(row.started_at ? new Date(row.started_at) : null)
         }
       }
     )
-    .subscribe((status) => {
-      console.log('[Realtime] class_sessions channel status:', status)
-    })
+    .subscribe()
 
   return () => {
     supabase.removeChannel(channel)
   }
 }, [studentId])
-
-  
-  
-   
 
   // realtime collaborative notes
   useEffect(() => {
@@ -269,108 +326,128 @@ useEffect(() => {
   }
 
   return (
-    <main className="p-6 max-w-5xl mx-auto grid gap-6">
-      <section className="border rounded overflow-hidden">
-        <div className="flex items-center justify-between p-4 pb-3">
-          <div className="text-sm text-gray-500">Room</div>
-        </div>
-        
-        <div
-          id="video-wrapper"
-          ref={videoWrapperRef}
-          style={{ height: isMiniPlayer ? `${videoPlaceholderHeight.current}px` : 'auto' }}
-        >
+    <>
+      <style>{`.no-select { user-select: none; }`}</style>
+      <main className="p-6 max-w-5xl mx-auto grid gap-6">
+        <section className="border rounded overflow-hidden">
+          <div className="flex items-center justify-between p-4 pb-3">
+            <div className="text-sm text-gray-500">Room</div>
+          </div>
+          
           <div
-            id="video-sticky"
-            ref={videoStickyRef}
-            className={!isMiniPlayer ? 'aspect-video w-full' : ''}
-            style={
-              isMiniPlayer
-                ? {
-                    position: 'fixed',
-                    top: `${headerHeight + 8}px`,
-                    left: '16px',
-                    width: '260px',
-                    height: '150px',
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.20)',
-                    zIndex: 9999,
-                    background: 'black',
-                    transition: 'all 0.25s ease',
-                    overflow: 'hidden'
-                  }
-                : {
-                    transition: 'all 0.25s ease',
-                    background: 'black',
-                    width: '100%',
-                  }
-            }
+            id="video-wrapper"
+            ref={videoWrapperRef}
+            style={{ height: isMiniPlayer ? `${videoPlaceholderHeight.current}px` : 'auto' }}
           >
-            <VideoDaily
-              studentId={studentId}
-              canJoin={active || isAdmin}
-              className="block w-full h-full"
-              isMiniPlayer={isMiniPlayer}
-            />
-          </div>
-        </div>
-
-        {isAdmin ? (
-          <div className="p-4 border-t flex gap-2">
-            {!active ? (
-              <button onClick={startClass} className="px-4 py-2 rounded bg-green-600 text-white">Start session</button>
-            ) : (
-              <button onClick={endClass} className="px-4 py-2 rounded bg-red-600 text-white">End session</button>
-            )}
-          </div>
-        ) : (
-          <p className="p-4 text-sm text-gray-600 border-t">
-            {active ? 'Class in session.' : 'Class not in session yet. You can view past notes below.'}
-          </p>
-        )}
-      </section>
-
-      <section className="border rounded p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold mb-2">Notes</h2>
-          <div className="text-xs text-gray-500">
-            {peersTyping > 0 ? `${peersTyping} ${peersTyping === 1 ? 'person is' : 'people are'} typing…` : (!active ? 'New note locked until class starts' : null)}
-          </div>
-        </div>
-        <textarea
-          className="w-full h-80 border rounded p-3"
-          value={notes}
-          readOnly={!active}
-          onChange={(e) => onChangeNotes(e.target.value)}
-          placeholder={active ? 'Type notes…' : 'Notes are locked until class starts.'}
-        />
-        <div className="text-sm text-gray-500 mt-1">
-          {!active ? 'Read-only' : saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
-        </div>
-
-        <h3 className="font-semibold mt-6 mb-2">Past Classes</h3>
-        <div className="divide-y border rounded">
-          {archive.length === 0 && <div className="p-3 text-sm text-gray-500">No past classes yet.</div>}
-          {archive.map((row) => {
-            const title = new Date(row.class_started_at).toLocaleString()
-            const subtitle = new Date(row.class_ended_at).toLocaleTimeString()
-            return (
-              <details key={row.id} className="p-3">
-                <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
-                <ArchivedEditable
-                  id={row.id}
-                  isAdmin={isAdmin}
-                  onDelete={() => {
-                    setArchive((prev) => prev.filter((x) => x.id !== row.id))
+            <div
+              id="video-sticky"
+              ref={videoStickyRef}
+              className={!isMiniPlayer ? 'aspect-video w-full' : 'touch-none'}
+              onPointerDown={(e) => onPointerDown(e, 'drag')}
+              style={
+                isMiniPlayer
+                  ? {
+                      position: 'fixed',
+                      top: `${miniPosition.top}px`,
+                      left: `${miniPosition.left}px`,
+                      width: `${miniSize.width}px`,
+                      height: `${miniSize.height}px`,
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.20)',
+                      zIndex: 9999,
+                      background: 'black',
+                      transition: 'all 0.25s ease',
+                      overflow: 'hidden',
+                      cursor: 'grab',
+                    }
+                  : {
+                      transition: 'all 0.25s ease',
+                      background: 'black',
+                      width: '100%',
+                    }
+              }
+            >
+              <VideoDaily
+                studentId={studentId}
+                canJoin={active || isAdmin}
+                className="block w-full h-full"
+                isMiniPlayer={isMiniPlayer}
+              />
+              {isMiniPlayer && (
+                <div
+                  onPointerDown={(e) => onPointerDown(e, 'resize')}
+                  style={{
+                    position: 'absolute',
+                    bottom: '0px',
+                    right: '0px',
+                    width: '18px',
+                    height: '18px',
+                    cursor: 'nwse-resize',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    borderTopLeftRadius: '8px',
                   }}
                 />
+              )}
+            </div>
+          </div>
 
-              </details>
-            )
-          })}
-        </div>
-      </section>
-    </main>
+          {isAdmin ? (
+            <div className="p-4 border-t flex gap-2">
+              {!active ? (
+                <button onClick={startClass} className="px-4 py-2 rounded bg-green-600 text-white">Start session</button>
+              ) : (
+                <button onClick={endClass} className="px-4 py-2 rounded bg-red-600 text-white">End session</button>
+              )}
+            </div>
+          ) : (
+            <p className="p-4 text-sm text-gray-600 border-t">
+              {active ? 'Class in session.' : 'Class not in session yet. You can view past notes below.'}
+            </p>
+          )}
+        </section>
+
+        <section className="border rounded p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold mb-2">Notes</h2>
+            <div className="text-xs text-gray-500">
+              {peersTyping > 0 ? `${peersTyping} ${peersTyping === 1 ? 'person is' : 'people are'} typing…` : (!active ? 'New note locked until class starts' : null)}
+            </div>
+          </div>
+          <textarea
+            className="w-full h-80 border rounded p-3"
+            value={notes}
+            readOnly={!active}
+            onChange={(e) => onChangeNotes(e.target.value)}
+            placeholder={active ? 'Type notes…' : 'Notes are locked until class starts.'}
+          />
+          <div className="text-sm text-gray-500 mt-1">
+            {!active ? 'Read-only' : saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ' '}
+          </div>
+
+          <h3 className="font-semibold mt-6 mb-2">Past Classes</h3>
+          <div className="divide-y border rounded">
+            {archive.length === 0 && <div className="p-3 text-sm text-gray-500">No past classes yet.</div>}
+            {archive.map((row) => {
+              const title = new Date(row.class_started_at).toLocaleString()
+              const subtitle = new Date(row.class_ended_at).toLocaleTimeString()
+              return (
+                <details key={row.id} className="p-3">
+                  <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
+                  <ArchivedEditable
+                    id={row.id}
+                    isAdmin={isAdmin}
+                    onDelete={() => {
+                      setArchive((prev) => prev.filter((x) => x.id !== row.id))
+                    }}
+                  />
+
+                </details>
+              )
+            })}
+          </div>
+        </section>
+      </main>
+    </>
   )
 }
 

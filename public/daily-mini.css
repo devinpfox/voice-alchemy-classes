@@ -1,0 +1,35 @@
+/* Hide Daily’s entire UI chrome */
+#daily-toolbar,
+.daily-controls,
+.daily-call-controls,
+.daily-participants-bar,
+.daily-participants-grid,
+.daily-participant-label,
+.daily-top-bar,
+.daily-bottom-bar,
+.daily-leave-button,
+.daily-logo,
+button,
+svg {
+  display: none !important;
+}
+
+/* Hide name bubbles */
+.daily-participant-name,
+.video-label {
+  display: none !important;
+}
+
+/* Make the video fill the container */
+video {
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Remove paddings */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: black !important;
+}
