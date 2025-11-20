@@ -15,9 +15,61 @@ export default function SessionView({ studentId, isAdmin = false }: Props) {
   const [archive, setArchive] = useState<Array<{ id: string; class_started_at: string; class_ended_at: string }>>([])
   const [cssUrl, setCssUrl] = useState<string>('')
 
+  // Mini-player state and refs
+  const videoWrapperRef = useRef<HTMLDivElement>(null)
+  const videoStickyRef = useRef<HTMLDivElement>(null)
+  const [isMiniPlayer, setIsMiniPlayer] = useState(false)
+  const [headerHeight, setHeaderHeight] = useState(0)
+  const videoPlaceholderHeight = useRef(0)
+
   useEffect(() => {
     if (typeof window !== 'undefined') setCssUrl(`${window.location.origin}/daily-overrides.css`)
   }, [])
+
+  // Effect for mini-player scroll and resize behavior
+  useEffect(() => {
+    const headerEl = document.querySelector('header')
+    const stickyEl = videoStickyRef.current
+
+    if (!headerEl || !stickyEl) return
+
+    const handleScroll = () => {
+      const wrapperEl = videoWrapperRef.current
+      const currentHeaderEl = document.querySelector('header') // Re-query for safety
+      if (!wrapperEl || !currentHeaderEl) return
+
+      const hHeight = currentHeaderEl.getBoundingClientRect().height
+      const wrapperTop = wrapperEl.getBoundingClientRect().top
+
+      const shouldBeMini = wrapperTop <= hHeight
+      setIsMiniPlayer(prev => (prev === shouldBeMini ? prev : shouldBeMini))
+    }
+
+    const handleResize = () => {
+      const currentHeaderEl = document.querySelector('header')
+      if (!currentHeaderEl) return
+      
+      setHeaderHeight(currentHeaderEl.getBoundingClientRect().height)
+
+      // Only update the placeholder height if we are not in mini-player mode.
+      // This preserves the original height for when we snap back.
+      if (!isMiniPlayer && videoStickyRef.current) {
+        videoPlaceholderHeight.current = videoStickyRef.current.offsetHeight
+      }
+    }
+
+    // Set initial values
+    setHeaderHeight(headerEl.getBoundingClientRect().height)
+    videoPlaceholderHeight.current = stickyEl.offsetHeight
+    
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleResize, { passive: true })
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [isMiniPlayer]) // Rerun when isMiniPlayer changes to update resize handler closure
 
   const clientId = useMemo(() => crypto.randomUUID(), [])
   const lastLocalSaveAt = useRef<number>(0)
@@ -222,13 +274,47 @@ useEffect(() => {
         <div className="flex items-center justify-between p-4 pb-3">
           <div className="text-sm text-gray-500">Room</div>
         </div>
-        <div className="w-full h-auto">
-          <VideoDaily
-            studentId={studentId}
-            canJoin={active || isAdmin === true}
-            className="block"
-          />
+        
+        <div
+          id="video-wrapper"
+          ref={videoWrapperRef}
+          style={{ height: isMiniPlayer ? `${videoPlaceholderHeight.current}px` : 'auto' }}
+        >
+          <div
+            id="video-sticky"
+            ref={videoStickyRef}
+            className={!isMiniPlayer ? 'aspect-video w-full' : ''}
+            style={
+              isMiniPlayer
+                ? {
+                    position: 'fixed',
+                    top: `${headerHeight + 8}px`,
+                    left: '16px',
+                    width: '260px',
+                    height: '150px',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.20)',
+                    zIndex: 9999,
+                    background: 'black',
+                    transition: 'all 0.25s ease',
+                    overflow: 'hidden'
+                  }
+                : {
+                    transition: 'all 0.25s ease',
+                    background: 'black',
+                    width: '100%',
+                  }
+            }
+          >
+            <VideoDaily
+              studentId={studentId}
+              canJoin={active || isAdmin}
+              className="block w-full h-full"
+              isMiniPlayer={isMiniPlayer}
+            />
+          </div>
         </div>
+
         {isAdmin ? (
           <div className="p-4 border-t flex gap-2">
             {!active ? (
@@ -272,12 +358,12 @@ useEffect(() => {
               <details key={row.id} className="p-3">
                 <summary className="cursor-pointer">{title} — ended {subtitle}</summary>
                 <ArchivedEditable
-  id={row.id}
-  isAdmin={isAdmin}
-  onDelete={() => {
-    setArchive((prev) => prev.filter((x) => x.id !== row.id))
-  }}
-/>
+                  id={row.id}
+                  isAdmin={isAdmin}
+                  onDelete={() => {
+                    setArchive((prev) => prev.filter((x) => x.id !== row.id))
+                  }}
+                />
 
               </details>
             )
